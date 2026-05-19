@@ -1,56 +1,127 @@
 name: Android Release CI/CD
-
+# 触发条件
 on:
   push:
     branches:
       - develop
+      - qa
       - product
 
 jobs:
   build-release:
+    # 使用 Ubuntu Linux 虚拟机
     runs-on: ubuntu-latest
 
+    # 执行步骤（按顺序）
     steps:
+      # 1. 拉取 GitHub 仓库代码（含 keystore.properties 与 release keystore）
       - name: Checkout Source
         uses: actions/checkout@v4
 
+      # 2. 安装 Node.js（React Native 打包依赖 Node）
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          # 缓存 npm 依赖，加快后续构建
           cache: npm
 
+      # 3. 安装 Java 17（Android Gradle Plugin 8+ 推荐）
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
+      # 4. 安装 Android SDK / 接受许可证（ubuntu-latest 默认无完整 SDK）
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      # 5. 安装 npm 依赖（使用 package-lock.json，构建可复现）
       - name: Install Dependencies
         run: npm ci
 
+      # 6. 为 gradlew 添加可执行权限
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
+      # 7. develop 分支
+      # 7.1 构建 Release APK（versionCode 使用 run_number，避免版本冲突）
+      - name: Build Android Release APK
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          cd android
+          ./gradlew assembleRelease -PversionCode=${{ github.run_number }}
+
+      # 7.2 将 APK 上传为 GitHub Actions Artifact，便于下载
+      - name: Upload APK Artifact
+        if: github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+
+      # 7.3 在 Summary 中输出 APK 下载入口（需登录 GitHub，在 Artifacts 中下载）
+      - name: Print APK download info
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          echo "### APK 构建完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact 名称:** \`app-release-apk\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **下载方式:** 打开下方运行页，在页面底部 **Artifacts** 区域下载" >> $GITHUB_STEP_SUMMARY
+          echo "- **运行页:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+       
+      # 8.qa分支
+      # 8.1 构建 Release AAB（versionCode 使用 run_number，避免 Play 版本冲突）
       - name: Build Android Release AAB
+        if: github.ref == 'refs/heads/qa'
         run: |
           cd android
           ./gradlew bundleRelease -PversionCode=${{ github.run_number }}
 
+      # 8.2 将 AAB 上传为 GitHub Actions Artifact，便于下载
       - name: Upload AAB Artifact
+        if: github.ref == 'refs/heads/qa'
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
 
+      # 8.3 上传 AAB 到 Google Play 内部测试轨道
       - name: Upload to Google Play Internal Testing
-        if: github.ref == 'refs/heads/product'
+        if: github.ref == 'refs/heads/qa'
         uses: r0adkll/upload-google-play@v1
         with:
+          # 在仓库 Settings → Secrets 中配置 GOOGLE_SERVICE_ACCOUNT_JSON
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           packageName: com.cursorautoeditorproject
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           track: internal
+          
+      # 9.product分支
+      # 9.1 构建 Release AAB（versionCode 使用 run_number，避免 Play 版本冲突）
+      - name: Build Android Release AAB
+        if: github.ref == 'refs/heads/product'
+        run: |
+          cd android
+          ./gradlew bundleRelease -PversionCode=${{ github.run_number }}
+
+      # 9.2 将 AAB 上传为 GitHub Actions Artifact，便于下载
+      - name: Upload AAB Artifact
+        if: github.ref == 'refs/heads/product'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+      # 9.3 上传 AAB 到 Google Play 正式版轨道
+      - name: Upload to Google Play Production
+        if: github.ref == 'refs/heads/product'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          # 在仓库 Settings → Secrets 中配置 GOOGLE_SERVICE_ACCOUNT_JSON
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.cursorautoeditorproject
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: production
+          status: completed
