@@ -130,12 +130,24 @@ jobs:
 
   # ========== iOS：真机 Release 包 + TestFlight（须 macOS Runner）==========
   ios-build-release:
-    runs-on: macos-latest
+    # 须 Xcode 26+（iOS 26 SDK）；macos-latest 可能仍是 Xcode 16，无法上传 ASC
+    runs-on: macos-26
 
     steps:
       # iOS-1. 拉取仓库代码
       - name: Checkout Source
         uses: actions/checkout@v4
+
+      # iOS-1.1 指定 Xcode 26（满足 App Store Connect 对最低 SDK 的要求）
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.4'
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep iphoneos || true
 
       # iOS-2. Node.js（React Native 打 JS Bundle）
       - name: Setup Node.js
