@@ -168,15 +168,31 @@ jobs:
         env:
           PROVISION_BASE64: ${{ secrets.IOS_MOBILEPROVISION_BASE64 }}
         run: |
+          set -euo pipefail
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$PROVISION_BASE64" | base64 --decode > /tmp/app.mobileprovision
+          if [ ! -s /tmp/app.mobileprovision ]; then
+            echo "Error: IOS_MOBILEPROVISION_BASE64 解码后为空，请检查 Secret 是否为完整一行 Base64。"
+            exit 1
+          fi
           security cms -D -i /tmp/app.mobileprovision > /tmp/app-profile.plist
+
           UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /tmp/app-profile.plist)
-          cp /tmp/app.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
-          TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier.0' /tmp/app-profile.plist)
           PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' /tmp/app-profile.plist)
           APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' /tmp/app-profile.plist)
           BUNDLE_ID="${APP_ID#*.}"
+
+          # Team ID：不同 profile 字段名/结构可能不同，依次尝试
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' /tmp/app-profile.plist 2>/dev/null || true)
+          if [ -z "$TEAM_ID" ]; then
+            TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :ApplicationIdentifierPrefix:0' /tmp/app-profile.plist 2>/dev/null || true)
+          fi
+          if [ -z "$TEAM_ID" ]; then
+            TEAM_ID="${APP_ID%%.*}"
+          fi
+
+          cp /tmp/app.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+
           echo "IOS_TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
           echo "IOS_PROFILE_UUID=$UUID" >> "$GITHUB_ENV"
           echo "IOS_PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
