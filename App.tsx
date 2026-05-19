@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     color: 'green',
   },
   homeTitle: {
-    color: 'black',
+    color: 'red',
   },
   homeContent: {
     color: 'green',
