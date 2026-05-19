@@ -47,6 +47,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
+      # 6.1 从 build.gradle 读取 versionName（versionCode 使用 run_number）
+      - name: Read Android version
+        run: |
+          VERSION_NAME=$(grep -m1 'versionName' android/app/build.gradle | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "APP_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
+
       # 7. develop 分支
       # 7.1 构建 Release APK（versionCode使用 run_number，short code使用自增，避免版本冲突）
       - name: Build Android Release APK
@@ -55,7 +62,17 @@ jobs:
           cd android
           ./gradlew assembleRelease -PversionCode=${{ github.run_number }}
 
-      # 7.2 将 APK 上传为 GitHub Actions Artifact，便于下载
+      # 7.2 输出 APK 版本号
+      - name: Print APK version
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          echo "this apk is ${APP_VERSION_NAME}(${APP_VERSION_CODE})"
+          echo "### APK 构建完成" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**this apk is ${APP_VERSION_NAME}(${APP_VERSION_CODE})**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      # 7.3 将 APK 上传为 GitHub Actions Artifact，便于下载
       - name: Upload APK Artifact
         if: github.ref == 'refs/heads/develop'
         uses: actions/upload-artifact@v4
@@ -63,15 +80,13 @@ jobs:
           name: app-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
 
-      # 7.3 在 Summary 中输出 APK 下载入口（需登录 GitHub，在 Artifacts 中下载）
+      # 7.4 在 Summary 中输出 APK 下载入口（需登录 GitHub，在 Artifacts 中下载）
       - name: Print APK download info
         if: github.ref == 'refs/heads/develop'
         run: |
-          echo "### APK 构建完成" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Artifact 名称:** \`app-release-apk\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **下载方式:** 打开下方运行页，在页面底部 **Artifacts** 区域下载" >> $GITHUB_STEP_SUMMARY
-          echo "- **运行页:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact 名称:** \`app-release-apk\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **下载方式:** 打开下方运行页，在页面底部 **Artifacts** 区域下载" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **运行页:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
        
       # 8.qa分支
       # 8.1 构建 Release AAB（versionCode使用 run_number，short code自增，避免版本冲突）
@@ -81,7 +96,17 @@ jobs:
           cd android
           ./gradlew bundleRelease -PversionCode=${{ github.run_number }}
 
-      # 8.2 将 AAB 上传为 GitHub Actions Artifact，便于下载
+      # 8.2 输出 AAB 版本号（qa）
+      - name: Print AAB version
+        if: github.ref == 'refs/heads/qa'
+        run: |
+          echo "this aab is ${APP_VERSION_NAME}(${APP_VERSION_CODE})"
+          echo "### AAB 构建完成 (qa)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**this aab is ${APP_VERSION_NAME}(${APP_VERSION_CODE})**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      # 8.3 将 AAB 上传为 GitHub Actions Artifact，便于下载
       - name: Upload AAB Artifact
         if: github.ref == 'refs/heads/qa'
         uses: actions/upload-artifact@v4
@@ -89,7 +114,7 @@ jobs:
           name: app-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
 
-      # 8.3 上传 AAB 到 Google Play 内部测试轨道
+      # 8.4 上传 AAB 到 Google Play 内部测试轨道
       - name: Upload to Google Play Internal Testing
         if: github.ref == 'refs/heads/qa'
         uses: r0adkll/upload-google-play@v1
@@ -108,7 +133,17 @@ jobs:
           cd android
           ./gradlew bundleRelease -PversionCode=${{ github.run_number }}
 
-      # 9.2 将 AAB 上传为 GitHub Actions Artifact，便于下载
+      # 9.2 输出 AAB 版本号（product）
+      - name: Print AAB version
+        if: github.ref == 'refs/heads/product'
+        run: |
+          echo "this aab is ${APP_VERSION_NAME}(${APP_VERSION_CODE})"
+          echo "### AAB 构建完成 (product)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**this aab is ${APP_VERSION_NAME}(${APP_VERSION_CODE})**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      # 9.3 将 AAB 上传为 GitHub Actions Artifact，便于下载
       - name: Upload AAB Artifact
         if: github.ref == 'refs/heads/product'
         uses: actions/upload-artifact@v4
@@ -116,7 +151,7 @@ jobs:
           name: app-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
 
-      # 9.3 上传 AAB 到 Google Play 正式版轨道
+      # 9.4 上传 AAB 到 Google Play 正式版轨道
       - name: Upload to Google Play Production
         if: github.ref == 'refs/heads/product'
         uses: r0adkll/upload-google-play@v1
@@ -159,6 +194,13 @@ jobs:
       # iOS-3. 安装 npm 依赖
       - name: Install Dependencies
         run: npm ci
+
+      # iOS-3.1 从 Xcode 工程读取 MARKETING_VERSION（Build 号使用 run_number）
+      - name: Read iOS version
+        run: |
+          VERSION_NAME=$(grep -m1 'MARKETING_VERSION' ios/CursorAutoEditorProject.xcodeproj/project.pbxproj | sed -E 's/.*= ([^;]+);/\1/' | tr -d ' ')
+          echo "APP_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
 
       # iOS-4. CocoaPods（RN iOS 原生依赖）
       - name: Install CocoaPods
@@ -304,6 +346,19 @@ jobs:
           IPA_PATH=$(find ios/build -name '*.ipa' | head -1)
           echo "IPA_PATH=$IPA_PATH" >> "$GITHUB_ENV"
           ls -la ios/build
+
+      # iOS-10.1 输出 IPA 版本号
+      - name: Print IPA version
+        if: |
+          github.ref == 'refs/heads/develop' ||
+          github.ref == 'refs/heads/qa' ||
+          github.ref == 'refs/heads/product'
+        run: |
+          echo "this ipa is ${APP_VERSION_NAME}(${APP_VERSION_CODE})"
+          echo "### IPA 构建完成" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**this ipa is ${APP_VERSION_NAME}(${APP_VERSION_CODE})**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
 
       # iOS-11. 上传 IPA 到 Actions Artifact（便于下载）
       - name: Upload IPA Artifact
