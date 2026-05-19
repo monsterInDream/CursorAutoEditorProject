@@ -1,4 +1,4 @@
-name: Android Release CI/CD
+name: Auto Release CI/CD
 # 触发条件
 on:
   push:
@@ -97,7 +97,7 @@ jobs:
           packageName: com.cursorautoeditorproject
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           track: internal
-          
+
       # 9.product分支
       # 9.1 构建 Release AAB（versionCode 使用 run_number，避免 Play 版本冲突）
       - name: Build Android Release AAB
