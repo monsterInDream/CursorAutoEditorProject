@@ -214,19 +214,16 @@ jobs:
           sed -i '' 's/11.0.2/12.1.0/g' "$FMT_SPEC"
           grep -E 'spec.version|:tag' "$FMT_SPEC"
 
-      # iOS-5. CocoaPods（RN iOS 原生依赖）
+      # iOS-5. CocoaPods（patch fmt 后须同步 Podfile.lock，再 install）
       - name: Install CocoaPods
         run: |
           set -euo pipefail
           cd ios
+          # Podfile.lock 若仍锁定 fmt 11.0.2，会与 patch 后的 podspec 冲突
+          sed -i '' 's/fmt (11.0.2)/fmt (12.1.0)/g' Podfile.lock
+          sed -i '' 's/fmt (= 11.0.2)/fmt (= 12.1.0)/g' Podfile.lock
+          rm -rf Pods
           pod install --repo-update
-
-      # iOS-5.1 若 Podfile.lock 仍锁定 fmt 11.x，强制更新 fmt
-      - name: Update fmt pod
-        run: |
-          set -euo pipefail
-          cd ios
-          pod update fmt --no-repo-update || pod install
 
       # iOS-6. 创建临时 Keychain（CI 无交互，须单独钥匙串导入 p12）
       - name: Create Temporary Keychain
