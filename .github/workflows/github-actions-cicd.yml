@@ -125,4 +125,3 @@ jobs:
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           tracks: production
           status: completed
-
