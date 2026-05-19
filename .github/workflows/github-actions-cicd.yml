@@ -163,12 +163,19 @@ jobs:
           security list-keychain -d user -s $KEYCHAIN
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN
 
-      # 5. 安装描述文件，并从 profile 解析 Team ID / UUID / Bundle ID
+      # 5. 安装描述文件（Team ID 用 Secret；UUID / Bundle ID 从 profile 解析）
       - name: Install provisioning profile
         env:
           PROVISION_BASE64: ${{ secrets.IOS_MOBILEPROVISION_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
           set -euo pipefail
+          if [ -z "${IOS_TEAM_ID:-}" ]; then
+            echo "Error: 请在 GitHub Secrets 中配置 IOS_TEAM_ID（Apple Developer 的 10 位 Team ID）。"
+            exit 1
+          fi
+          echo "IOS_TEAM_ID=$IOS_TEAM_ID" >> "$GITHUB_ENV"
+
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$PROVISION_BASE64" | base64 --decode > /tmp/app.mobileprovision
           if [ ! -s /tmp/app.mobileprovision ]; then
@@ -182,22 +189,12 @@ jobs:
           APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' /tmp/app-profile.plist)
           BUNDLE_ID="${APP_ID#*.}"
 
-          # Team ID：不同 profile 字段名/结构可能不同，依次尝试
-          TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' /tmp/app-profile.plist 2>/dev/null || true)
-          if [ -z "$TEAM_ID" ]; then
-            TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :ApplicationIdentifierPrefix:0' /tmp/app-profile.plist 2>/dev/null || true)
-          fi
-          if [ -z "$TEAM_ID" ]; then
-            TEAM_ID="${APP_ID%%.*}"
-          fi
-
           cp /tmp/app.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
-          echo "IOS_TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
           echo "IOS_PROFILE_UUID=$UUID" >> "$GITHUB_ENV"
           echo "IOS_PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
           echo "IOS_BUNDLE_ID=$BUNDLE_ID" >> "$GITHUB_ENV"
-          echo "Team ID: $TEAM_ID"
+          echo "Team ID: $IOS_TEAM_ID (from Secret)"
           echo "Profile: $PROFILE_NAME ($UUID)"
           echo "Bundle ID: $BUNDLE_ID"
 
