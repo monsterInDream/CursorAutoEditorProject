@@ -163,18 +163,18 @@ jobs:
           security list-keychain -d user -s $KEYCHAIN
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN
 
-      # 5. 安装描述文件（Team ID 用 Secret；UUID / Bundle ID 从 profile 解析）
+      # 5. 安装描述文件（Team ID 用 Secret APPSTORE_TEAM_ID；UUID / Bundle ID 从 profile 解析）
       - name: Install provisioning profile
         env:
           PROVISION_BASE64: ${{ secrets.IOS_MOBILEPROVISION_BASE64 }}
-          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          APPSTORE_TEAM_ID: ${{ secrets.APPSTORE_TEAM_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${IOS_TEAM_ID:-}" ]; then
-            echo "Error: 请在 GitHub Secrets 中配置 IOS_TEAM_ID（Apple Developer 的 10 位 Team ID）。"
+          if [ -z "${APPSTORE_TEAM_ID:-}" ]; then
+            echo "Error: 请在 GitHub Secrets 中配置 APPSTORE_TEAM_ID（Apple Developer 的 10 位 Team ID）。"
             exit 1
           fi
-          echo "IOS_TEAM_ID=$IOS_TEAM_ID" >> "$GITHUB_ENV"
+          echo "APPSTORE_TEAM_ID=$APPSTORE_TEAM_ID" >> "$GITHUB_ENV"
 
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$PROVISION_BASE64" | base64 --decode > /tmp/app.mobileprovision
@@ -194,7 +194,7 @@ jobs:
           echo "IOS_PROFILE_UUID=$UUID" >> "$GITHUB_ENV"
           echo "IOS_PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
           echo "IOS_BUNDLE_ID=$BUNDLE_ID" >> "$GITHUB_ENV"
-          echo "Team ID: $IOS_TEAM_ID (from Secret)"
+          echo "Team ID: $APPSTORE_TEAM_ID (from Secret)"
           echo "Profile: $PROFILE_NAME ($UUID)"
           echo "Bundle ID: $BUNDLE_ID"
 
@@ -229,7 +229,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath $RUNNER_TEMP/App.xcarchive \
             archive \
-            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            DEVELOPMENT_TEAM="$APPSTORE_TEAM_ID" \
             PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
@@ -249,7 +249,7 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>method</key><string>app-store</string>
-            <key>teamID</key><string>${IOS_TEAM_ID}</string>
+            <key>teamID</key><string>${APPSTORE_TEAM_ID}</string>
             <key>uploadSymbols</key><true/>
             <key>signingStyle</key><string>manual</string>
             <key>provisioningProfiles</key>
