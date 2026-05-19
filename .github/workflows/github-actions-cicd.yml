@@ -202,13 +202,33 @@ jobs:
           echo "APP_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "APP_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
 
-      # iOS-4. CocoaPods（RN iOS 原生依赖）
+      # iOS-3.2 让 Xcode 脚本阶段能找到 node（Bundle React Native code and images）
+      - name: Configure Node for Xcode
+        run: echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
+
+      # iOS-4. Xcode 26 与 RN 0.78 自带的 fmt 11.0.2 不兼容，须升到 12.1.0 才能编译
+      - name: Patch fmt for Xcode 26
+        run: |
+          set -euo pipefail
+          FMT_SPEC=node_modules/react-native/third-party-podspecs/fmt.podspec
+          sed -i '' 's/11.0.2/12.1.0/g' "$FMT_SPEC"
+          grep -E 'spec.version|:tag' "$FMT_SPEC"
+
+      # iOS-5. CocoaPods（RN iOS 原生依赖）
       - name: Install CocoaPods
         run: |
+          set -euo pipefail
           cd ios
-          pod install
+          pod install --repo-update
 
-      # iOS-5. 创建临时 Keychain（CI 无交互，须单独钥匙串导入 p12）
+      # iOS-5.1 若 Podfile.lock 仍锁定 fmt 11.x，强制更新 fmt
+      - name: Update fmt pod
+        run: |
+          set -euo pipefail
+          cd ios
+          pod update fmt --no-repo-update || pod install
+
+      # iOS-6. 创建临时 Keychain（CI 无交互，须单独钥匙串导入 p12）
       - name: Create Temporary Keychain
         run: |
           set -euo pipefail
@@ -222,7 +242,7 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
 
-      # iOS-6. 从 Secret 恢复 Apple Distribution 证书（.p12）
+      # iOS-7. 从 Secret 恢复 Apple Distribution 证书（.p12）
       - name: Install Distribution Certificate
         env:
           P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
@@ -240,7 +260,7 @@ jobs:
           # 允许 codesign 在无 UI 的 Runner 上使用证书
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-      # iOS-7. 安装描述文件，并解析 UUID / 名称 / Bundle ID（须与 App Store Connect 一致）
+      # iOS-8. 安装描述文件，并解析 UUID / 名称 / Bundle ID（须与 App Store Connect 一致）
       - name: Install Provisioning Profile
         env:
           PROVISION_BASE64: ${{ secrets.IOS_MOBILEPROVISION_BASE64 }}
@@ -271,7 +291,7 @@ jobs:
           echo "Profile: $PROFILE_NAME ($UUID)"
           echo "Bundle ID: $BUNDLE_ID"
 
-      # iOS-8. App Store Connect API Key（供 altool 读取：AuthKey_<KEY_ID>.p8）
+      # iOS-9. App Store Connect API Key（供 altool 读取：AuthKey_<KEY_ID>.p8）
       - name: Install App Store Connect API Key
         env:
           API_KEY_BASE64: ${{ secrets.APPSTORE_API_KEY_BASE64 }}
@@ -285,7 +305,7 @@ jobs:
             exit 1
           fi
 
-      # iOS-9. Archive（develop / qa / product 共用；Build 号 = run_number）
+      # iOS-10. Archive（develop / qa / product 共用；Build 号 = run_number）
       - name: Archive iOS Release
         if: |
           github.ref == 'refs/heads/develop' ||
@@ -294,6 +314,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ios/build
+          set -o pipefail
           xcodebuild \
             -workspace ios/CursorAutoEditorProject.xcworkspace \
             -scheme CursorAutoEditorProject \
@@ -307,9 +328,12 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE="$IOS_PROFILE_UUID" \
             PROVISIONING_PROFILE_SPECIFIER="$IOS_PROFILE_NAME" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            2>&1 | tee ios/build/xcodebuild-archive.log
+          echo "--- 若失败，请在本日志中搜索 error: ---"
+          grep -i "error:" ios/build/xcodebuild-archive.log | tail -20 || true
 
-      # iOS-10. 导出 App Store IPA（manual 导出须指定 provisioningProfiles）
+      # iOS-11. 导出 App Store IPA（manual 导出须指定 provisioningProfiles）
       - name: Export IPA
         if: |
           github.ref == 'refs/heads/develop' ||
@@ -347,7 +371,7 @@ jobs:
           echo "IPA_PATH=$IPA_PATH" >> "$GITHUB_ENV"
           ls -la ios/build
 
-      # iOS-10.1 输出 IPA 版本号
+      # iOS-11.1 输出 IPA 版本号
       - name: Print IPA version
         if: |
           github.ref == 'refs/heads/develop' ||
@@ -360,7 +384,7 @@ jobs:
           echo "**this ipa is ${APP_VERSION_NAME}(${APP_VERSION_CODE})**" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-      # iOS-11. 上传 IPA 到 Actions Artifact（便于下载）
+      # iOS-12. 上传 IPA 到 Actions Artifact（便于下载）
       - name: Upload IPA Artifact
         if: |
           github.ref == 'refs/heads/develop' ||
@@ -371,7 +395,7 @@ jobs:
           name: ios-ipa
           path: ${{ env.IPA_PATH }}
 
-      # iOS-12. 上传到 TestFlight（altool 自动读取 ~/.appstoreconnect/private_keys/AuthKey_*.p8）
+      # iOS-13. 上传到 TestFlight（altool 自动读取 ~/.appstoreconnect/private_keys/AuthKey_*.p8）
       - name: Upload to TestFlight
         if: |
           github.ref == 'refs/heads/develop' ||
