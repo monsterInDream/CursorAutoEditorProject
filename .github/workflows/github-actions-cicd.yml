@@ -46,7 +46,7 @@ jobs:
         run: chmod +x android/gradlew
 
       # 7. develop 分支
-      # 7.1 构建 Release APK（versionCode 使用 run_number，避免版本冲突）
+      # 7.1 构建 Release APK（versionCode使用 run_number，short code使用自增，避免版本冲突）
       - name: Build Android Release APK
         if: github.ref == 'refs/heads/develop'
         run: |
@@ -72,7 +72,7 @@ jobs:
           echo "- **运行页:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
        
       # 8.qa分支
-      # 8.1 构建 Release AAB（versionCode 使用 run_number，避免 Play 版本冲突）
+      # 8.1 构建 Release AAB（versionCode使用 run_number，short code自增，避免版本冲突）
       - name: Build Android Release AAB
         if: github.ref == 'refs/heads/qa'
         run: |
@@ -99,7 +99,7 @@ jobs:
           track: internal
 
       # 9.product分支
-      # 9.1 构建 Release AAB（versionCode 使用 run_number，避免 Play 版本冲突）
+      # 9.1 构建 Release AAB（versionCode使用 run_number，short code使用自增，避免版本冲突）
       - name: Build Android Release AAB
         if: github.ref == 'refs/heads/product'
         run: |
