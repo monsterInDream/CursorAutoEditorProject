@@ -1,0 +1,56 @@
+name: Android Release CI/CD
+
+on:
+  push:
+    branches:
+      - develop
+      - product
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build Android Release AAB
+        run: |
+          cd android
+          ./gradlew bundleRelease -PversionCode=${{ github.run_number }}
+
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload to Google Play Internal Testing
+        if: github.ref == 'refs/heads/product'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.cursorautoeditorproject
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
