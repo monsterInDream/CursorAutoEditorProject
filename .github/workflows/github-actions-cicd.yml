@@ -173,7 +173,7 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      # 1 指定 Xcode 16.4（满足 App Store Connect 对最低 SDK 的要求）
+      # 指定 Xcode 16.4（满足 App Store Connect 对最低 SDK 的要求）
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -206,12 +206,15 @@ jobs:
       - name: Configure Node for Xcode
         run: echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
 
-      # 5. CocoaPods
+      # 5. CocoaPods（Podfile.lock 须与 RN 自带 fmt.podspec 11.0.2 一致，Xcode 16 无需 12.1.0）
       - name: Install CocoaPods
         env:
           LANG: en_US.UTF-8
         run: |
           set -euo pipefail
+          # 若 lock 仍为 fmt 12.1.0，会与 node_modules 里 11.0.2 冲突
+          sed -i '' 's/fmt (12.1.0)/fmt (11.0.2)/g' ios/Podfile.lock
+          sed -i '' 's/fmt (= 12.1.0)/fmt (= 11.0.2)/g' ios/Podfile.lock
           cd ios
           rm -rf Pods
           pod install --repo-update
