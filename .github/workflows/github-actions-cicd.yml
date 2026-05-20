@@ -165,48 +165,49 @@ jobs:
 
   # ========== iOS：真机 Release 包 + TestFlight（须 macOS Runner）==========
   ios-build-release:
-    # 须 Xcode >= 16；macos 必须>=15
-    runs-on: macos-15
+    # 必须使用 iOS 26 SDK（Xcode 26+）
+    runs-on: macos-26
 
     steps:
       # 1. 拉取仓库代码
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      # 指定 Xcode 16.4（满足 App Store Connect 对最低 SDK 的要求）
-      - name: Select Xcode
+      # 2. App Store 要求使用 iOS 26 SDK（Xcode 26+）；macos-26 镜像提供 26.4.1
+      - name: Select Xcode 26.4.1
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16.4'
-      # 显示 Xcode 版本
+          xcode-version: '26.4.1'
+
+      # 2.2. 显示 Xcode 版本
       - name: Show Xcode version
         run: |
           xcodebuild -version
           xcodebuild -showsdks | grep iphoneos || true
 
-      # 2. Node.js（React Native 打 JS Bundle）
+      # 3. 安装Node.js（React Native 打 JS Bundle）
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      # 3. 安装 npm 依赖
+      # 4. 安装 npm 依赖
       - name: Install Dependencies
         run: npm ci
 
-      # 4.1 从 Xcode 工程读取 MARKETING_VERSION（Build 号使用 run_number）
+      # 从 Xcode 工程读取 MARKETING_VERSION（Build 号使用 run_number）
       - name: Read iOS version
         run: |
           VERSION_NAME=$(grep -m1 'MARKETING_VERSION' ios/CursorAutoEditorProject.xcodeproj/project.pbxproj | sed -E 's/.*= ([^;]+);/\1/' | tr -d ' ')
           echo "APP_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "APP_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
 
-      # 4.2 让 Xcode 脚本阶段能找到 node（Bundle React Native code and images）
+      # 让 Xcode 脚本阶段能找到 node（Bundle React Native code and images）
       - name: Configure Node for Xcode
         run: echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
 
-      # 5. CocoaPods（Podfile.lock 须与 RN 自带 fmt.podspec 11.0.2 一致，Xcode 16 无需 12.1.0）
+      # 5. CocoaPods（Podfile.lock 须与 RN 自带 fmt.podspec 11.0.2 一致）
       - name: Install CocoaPods
         env:
           LANG: en_US.UTF-8
@@ -332,27 +333,21 @@ jobs:
           github.ref == 'refs/heads/product'
         run: |
           set -euo pipefail
-          cat > ios/ExportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>teamID</key>
-            <string>${APPSTORE_TEAM_ID}</string>
-            <key>uploadSymbols</key>
-            <true/>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>${IOS_BUNDLE_ID}</key>
-              <string>${IOS_PROFILE_NAME}</string>
-            </dict>
-          </dict>
-          </plist>
-          EOF
+          /usr/bin/python3 - <<'PY'
+          import os
+          import plistlib
+          plist = {
+              "method": "app-store",
+              "signingStyle": "manual",
+              "teamID": os.environ["APPSTORE_TEAM_ID"],
+              "uploadSymbols": True,
+              "provisioningProfiles": {
+                  os.environ["IOS_BUNDLE_ID"]: os.environ["IOS_PROFILE_NAME"],
+              },
+          }
+          with open("ios/ExportOptions.plist", "wb") as f:
+              plistlib.dump(plist, f)
+          PY
           xcodebuild \
             -exportArchive \
             -archivePath ios/build/CursorAutoEditorProject.xcarchive \
