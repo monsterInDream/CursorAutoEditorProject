@@ -207,15 +207,21 @@ jobs:
       - name: Configure Node for Xcode
         run: echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
 
-      # 5. CocoaPods（Podfile.lock 须与 RN 自带 fmt.podspec 11.0.2 一致）
+      # 5. Xcode 26.4+ 须 fmt 12.1.0（RN 0.78 自带 11.0.2 在 Clang 21 下无法编译 format.cc）
+      - name: Patch fmt for Xcode 26
+        run: |
+          set -euo pipefail
+          FMT_SPEC=node_modules/react-native/third-party-podspecs/fmt.podspec
+          sed -i '' 's/11.0.2/12.1.0/g' "$FMT_SPEC"
+          grep -E 'spec.version|:tag' "$FMT_SPEC"
+
       - name: Install CocoaPods
         env:
           LANG: en_US.UTF-8
         run: |
           set -euo pipefail
-          # 若 lock 仍为 fmt 12.1.0，会与 node_modules 里 11.0.2 冲突
-          sed -i '' 's/fmt (12.1.0)/fmt (11.0.2)/g' ios/Podfile.lock
-          sed -i '' 's/fmt (= 12.1.0)/fmt (= 11.0.2)/g' ios/Podfile.lock
+          sed -i '' 's/fmt (11.0.2)/fmt (12.1.0)/g' ios/Podfile.lock
+          sed -i '' 's/fmt (= 11.0.2)/fmt (= 12.1.0)/g' ios/Podfile.lock
           cd ios
           rm -rf Pods
           pod install --repo-update
